@@ -37,7 +37,11 @@ def summarize(config_path: Path) -> None:
     baseline = json.loads((out / "baseline_aggregate.json").read_text(encoding="utf-8"))
     ppo = json.loads((out / "ppo_aggregate.json").read_text(encoding="utf-8"))
     trajectory = json.loads((out / "learning_trajectory_aggregate.json").read_text(encoding="utf-8"))
-    if any(payload.get("test_access_count") != 0 for payload in (baseline, ppo, trajectory)):
+    bootstrap = json.loads((out / "bootstrap_aggregate.json").read_text(encoding="utf-8"))
+    availability = json.loads((out / "observation_availability_aggregate.json").read_text(encoding="utf-8"))
+    scale_diagnostics = json.loads((out / "state_scale_diagnostics_aggregate.json").read_text(encoding="utf-8"))
+    clip_probe = json.loads((out / "sensitivity" / "posthoc_goff_a30_s1_observation_clip_10" / "aggregate.json").read_text(encoding="utf-8"))
+    if any(payload.get("test_access_count") != 0 for payload in (baseline, ppo, trajectory, bootstrap, availability, scale_diagnostics, clip_probe)):
         raise RuntimeError("test access count is not zero")
 
     REPORT_CSV.parent.mkdir(parents=True, exist_ok=True)
@@ -91,6 +95,22 @@ def summarize(config_path: Path) -> None:
         s0 = [float(row["latent_bis_mae"]) for row in selected if row["condition_id"].endswith("S0")]
         s1 = [float(row["latent_bis_mae"]) for row in selected if row["condition_id"].endswith("S1")]
         trajectory_summary.append({"timestep": timestep, "s0_training_subset_mae_mean": statistics.mean(s0), "s1_training_subset_mae_mean": statistics.mean(s1)})
+    sensitivity_path = out / "sensitivity" / "posthoc_s1_learning_rate_3e-4" / "aggregate.json"
+    sensitivity_comparison = []
+    if sensitivity_path.is_file():
+        sensitivity = json.loads(sensitivity_path.read_text(encoding="utf-8"))
+        if sensitivity.get("posthoc") is not True or sensitivity.get("test_access_count") != 0:
+            raise RuntimeError("invalid post-hoc sensitivity boundary")
+        for condition in [row for row in config["conditions"] if row["state_id"] == "S1"]:
+            primary_rows = [row for row in ppo["aggregates"] if row["condition_id"] == condition["condition_id"]]
+            sensitivity_rows = [row for row in sensitivity["aggregates"] if row["condition_id"] == condition["condition_id"]]
+            primary_mean, primary_sd = mean_sd([float(row["latent_bis_mae"]) for row in primary_rows])
+            sensitivity_mean, sensitivity_sd = mean_sd([float(row["latent_bis_mae"]) for row in sensitivity_rows])
+            sensitivity_comparison.append({"condition_id": condition["condition_id"], "primary_learning_rate": 0.001, "primary_mae_mean": primary_mean, "primary_seed_sd": primary_sd, "posthoc_learning_rate": 0.0003, "posthoc_mae_mean": sensitivity_mean, "posthoc_seed_sd": sensitivity_sd, "posthoc_minus_primary_mae": sensitivity_mean - primary_mean})
+    clip_values = [float(row["latent_bis_mae"]) for row in clip_probe["aggregates"]]
+    clip_mean, clip_sd = mean_sd(clip_values)
+    clip_primary = next(row for row in condition_summary if row["condition_id"] == "Goff_A30_S1")
+    clip_summary = {"probe_id": clip_probe["probe_id"], "posthoc": True, "condition_id": "Goff_A30_S1", "observation_clip_absolute": 10.0, "seed_count": len(clip_values), "primary_mae_mean": clip_primary["latent_bis_mae_mean"], "primary_seed_sd": clip_primary["latent_bis_mae_seed_sd"], "clipped_mae_mean": clip_mean, "clipped_seed_sd": clip_sd, "clipped_minus_primary_mae": clip_mean - clip_primary["latent_bis_mae_mean"], "checkpoints_verified": clip_probe["checkpoints"]}
     public = {
         "protocol_id": config["protocol_id"], "evidence_scope": config["evidence_scope"], "config_sha256": config_hash,
         "source_git_sha": preparation["source_git_sha"], "training_job_count": queue["total_jobs"], "training_target_timesteps_per_job": config["training_target_timesteps"],
@@ -100,6 +120,11 @@ def summarize(config_path: Path) -> None:
         "validation_case_count": preparation["bounded_validation_case_count"], "test_access_count": 0,
         "condition_summary": condition_summary, "paired_seed_contrasts": contrasts,
         "pi_baseline_comparison": baseline_comparison, "learning_trajectory_summary": trajectory_summary,
+        "posthoc_s1_learning_rate_sensitivity": sensitivity_comparison,
+        "paired_subject_bootstrap": bootstrap,
+        "observation_availability": availability,
+        "state_scale_diagnostics": scale_diagnostics,
+        "posthoc_s1_observation_clip_probe": clip_summary,
         "descriptive_lowest_mae_condition": best["condition_id"], "descriptive_lowest_mae": best["latent_bis_mae_mean"],
         "baseline_selection": baseline["selection"], "learning_trajectory_row_count": len(trajectory["rows"]),
         "claims_boundary": "VitalDB-informed reconstructed simulation; not patient outcomes or clinical intervention evidence",
@@ -109,6 +134,11 @@ def summarize(config_path: Path) -> None:
     effects = "\n".join(f"| {row['effect']} | {row['left']} − {row['right']} | {row['mean_paired_seed_difference']:+.3f} ± {row['seed_sd']:.3f} |" for row in contrasts)
     baseline_table = "\n".join(f"| {row['condition_id']} | {row['ppo_mae_seed_mean']:.3f} | {row['pi_mae']:.3f} | {row['ppo_minus_pi_mae']:+.3f} |" for row in baseline_comparison)
     trajectory_table = "\n".join(f"| {row['timestep']:,} | {row['s0_training_subset_mae_mean']:.3f} | {row['s1_training_subset_mae_mean']:.3f} |" for row in trajectory_summary)
+    sensitivity_table = "\n".join(f"| {row['condition_id']} | {row['primary_mae_mean']:.3f} ± {row['primary_seed_sd']:.3f} | {row['posthoc_mae_mean']:.3f} ± {row['posthoc_seed_sd']:.3f} | {row['posthoc_minus_primary_mae']:+.3f} |" for row in sensitivity_comparison)
+    bootstrap_table = "\n".join(f"| {row['effect']} | {row['left']} − {row['right']} | {row['mean_difference']:+.3f} | [{row['bootstrap_95ci_low']:+.3f}, {row['bootstrap_95ci_high']:+.3f}] |" for row in bootstrap["factor_contrasts"])
+    availability_table = "\n".join(f"| {row['profile_id']} | {100*row['visible_fraction']:.1f}% | {100*row['reason_no_prior_observation_fraction']:.1f}% | {100*row['reason_sqi_below_threshold_fraction']:.1f}% | {100*row['reason_stale_beyond_pipeline_cap_fraction']:.1f}% |" for row in availability["aggregates"])
+    worst_scale_rows = sorted(scale_diagnostics["rows"], key=lambda row: row["absolute_p99"], reverse=True)[:8]
+    scale_table = "\n".join(f"| {row['profile_id']} | {row['field_name']} | {row['absolute_p95']:.2f} | {row['absolute_p99']:.2f} | {row['absolute_max']:.2f} |" for row in worst_scale_rows)
     REPORT_MD.write_text(f"""# Night 02 CPU Results
 
 ## Outcome
@@ -141,6 +171,12 @@ Differences are paired by seed. Negative MAE differences favor the left conditio
 |---|---|---:|
 {effects}
 
+The subject-paired bootstrap below averages the three seeds within each subject before 10,000 deterministic resamples. Intervals are exploratory and do not correct for multiple comparisons.
+
+| Factor | Contrast | Mean difference | Subject-bootstrap 95% interval |
+|---|---|---:|---:|
+{bootstrap_table}
+
 ## Baselines and diagnostics
 
 Constant, P, and PI controllers were tuned only on the frozen 12-subject training subset, frozen, then evaluated on internal validation. Controller state reset per case; missing feedback used the base action without integral update; exactly one action update occurred per transition. Every PPO checkpoint was also evaluated on that same train-only subset to produce {len(trajectory['rows'])} learning-trajectory rows without checkpoint selection. Full non-identifying aggregate rows are in `night02_results.csv` and machine-readable summary fields are in `night02_summary.json`.
@@ -156,6 +192,38 @@ The S0 policies were close to the tuned PI reference. S1 was strongly seed-sensi
 {trajectory_table}
 
 S1 improved over the fixed checkpoints but remained unstable at the final checkpoint. These training-subset diagnostics were not used to choose a checkpoint.
+
+## Observation availability
+
+Availability was summarized over the same internal validation subjects. Only aggregate reason fractions are reported; raw SQI values and event traces remain private.
+
+| Profile | Visible | No prior observation | Low SQI | Stale |
+|---|---:|---:|---:|---:|
+{availability_table}
+
+Within the 600-second window, SQI gating reduced visible states from 19.8% to about 10.8%; the 20- versus 30-second age cap produced almost no availability difference because no stale states occurred. The large no-prior fraction reflects the start timing of recorded BIS availability in this bounded window.
+
+The largest standardized S1 magnitudes under a fixed 1.5 mg/10s probe are shown below. No non-finite states occurred.
+
+| Profile | Field | Absolute p95 | Absolute p99 | Absolute max |
+|---|---|---:|---:|---:|
+{scale_table}
+
+The preprocessing-neutral scaler deliberately fits BIS and propofol fields to a zero-reference distribution, leaving runtime cumulative propofol and BIS history values at large magnitudes. This is protocol-consistent, but it is a plausible optimization hazard for S1.
+
+## Post-hoc S1 learning-rate sensitivity
+
+The primary S1 seed instability motivated an isolated, explicitly post-hoc rerun at learning rate 3e-4. It used the same training universe, budget, seeds, and validation set and did not alter the primary analysis.
+
+| Condition | Primary 1e-3 MAE | Post-hoc 3e-4 MAE | Post-hoc − primary |
+|---|---:|---:|---:|
+{sensitivity_table}
+
+Lowering the learning rate did not resolve instability: one seed converged well while the other two produced low-dose policies with high BIS MAE, and the identity of the successful seed changed. This points to optimization sensitivity rather than a robust S1 advantage.
+
+## Post-hoc S1 scale probe
+
+For one representative condition (`Goff_A30_S1`), a three-seed diagnostic clipped standardized observations to ±10 while leaving the training universe, PPO budget, and all other settings unchanged. Mean validation MAE changed from {clip_summary['primary_mae_mean']:.3f} ± {clip_summary['primary_seed_sd']:.3f} to {clip_summary['clipped_mae_mean']:.3f} ± {clip_summary['clipped_seed_sd']:.3f}; all {clip_summary['checkpoints_verified']} checkpoints were verified. This strongly supports an input-scale optimization problem, but because the probe was post-hoc and limited to one condition it is not primary evidence and does not establish the best general scaling rule.
 
 ## Limitations
 

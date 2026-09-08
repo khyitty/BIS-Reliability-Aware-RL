@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "journal"))
 
 from night02_common import RunningStatistic, schedule_integral, stable_order
 from run_night02_cpu import verify_checkpoint
-from evaluate_night02_cpu import Controller
+from evaluate_night02_cpu import Controller, bootstrap_mean
 from summarize_night02 import mean_sd
 
 
@@ -65,3 +65,11 @@ def test_public_summary_seed_dispersion_uses_sample_sd() -> None:
     mean, spread = mean_sd([1.0, 2.0, 3.0])
     assert mean == pytest.approx(2.0)
     assert spread == pytest.approx(1.0)
+
+
+def test_bootstrap_mean_is_seed_reproducible() -> None:
+    import numpy as np
+    first = bootstrap_mean(np.asarray([1.0, 2.0, 3.0]), np.random.Generator(np.random.PCG64(7)), draws=200)
+    second = bootstrap_mean(np.asarray([1.0, 2.0, 3.0]), np.random.Generator(np.random.PCG64(7)), draws=200)
+    assert first == second
+    assert first[0] == pytest.approx(2.0)
