@@ -182,15 +182,46 @@ def evaluate_ppo(config_path: Path) -> None:
     print(json.dumps({"aggregate_rows": len(aggregates), "validation_case_rows": len(rows)}))
 
 
+def evaluate_learning_trajectory(config_path: Path) -> None:
+    """Evaluate every fixed checkpoint on the train-only tuning subset.
+
+    This is a descriptive learning diagnostic only and never selects a model;
+    the final checkpoint remains predeclared for validation.
+    """
+    config, config_hash = load_config(config_path)
+    out, membership, store, scalers = load_private(config)
+    target, interval = int(config["training_target_timesteps"]), int(config["checkpoint_interval_timesteps"])
+    rows = []
+    for condition in config["conditions"]:
+        for seed in config["seeds"]:
+            directory = out / "jobs" / condition["condition_id"] / f"seed_{seed}"
+            for timestep in range(interval, target + 1, interval):
+                checkpoint = directory / f"checkpoint_{timestep:010d}"
+                verify_checkpoint(checkpoint, {"condition_id": condition["condition_id"], "seed": seed, "timestep": timestep, "config_sha256": config_hash})
+                model = PPO.load(str(checkpoint / "model.zip"), device="cpu")
+                case_rows = []
+                for caseid in membership["tune_cases"]:
+                    def policy(observation: np.ndarray, info: dict[str, Any]) -> float:
+                        action, _ = model.predict(observation, deterministic=True)
+                        return float(np.asarray(action).reshape(-1)[0])
+                    metrics, _ = run_case(store, caseid, condition, scalers[condition["state_id"]], int(seed), config["common_horizon_seconds"], policy)
+                    case_rows.append({"subjectid": str(store._by_case[caseid]["subjectid"]), **metrics})
+                rows.append({"condition_id": condition["condition_id"], "seed": seed, "timestep": timestep, "training_subset_subject_count": len({row["subjectid"] for row in case_rows}), **aggregate_subject_rows(case_rows, list(METRICS))})
+    atomic_json(out / "learning_trajectory_aggregate.json", {"rows": rows, "selection_performed": False, "subset": "train_only_frozen_tuning_subset", "final_checkpoint_predeclared": True, "test_access_count": 0})
+    print(json.dumps({"trajectory_rows": len(rows), "checkpoints_per_job": target // interval}))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("baselines", "ppo"))
+    parser.add_argument("command", choices=("baselines", "ppo", "trajectory"))
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args()
     if args.command == "baselines":
         tune_baselines(args.config)
-    else:
+    elif args.command == "ppo":
         evaluate_ppo(args.config)
+    else:
+        evaluate_learning_trajectory(args.config)
 
 
 if __name__ == "__main__":
