@@ -181,12 +181,16 @@ class JournalCallback(BaseCallback):
         super().__init__(0)
         self.directory, self.interval, self.target, self.identity = directory, interval, target, identity
         self.last_checkpoint = 0
+        self.last_heartbeat = time.monotonic()
 
     def _on_step(self) -> bool:
         for key in ("new_obs", "actions", "rewards"):
             if key in self.locals and not np.isfinite(np.asarray(self.locals[key])).all():
                 raise RuntimeError(f"nonfinite PPO {key}")
         step = int(self.model.num_timesteps)
+        if time.monotonic() - self.last_heartbeat >= 30.0:
+            atomic_json(self.directory / "heartbeat.json", {"event": "training", "timestep": step, "utc": utc_now()})
+            self.last_heartbeat = time.monotonic()
         if step and step % self.interval == 0 and step > self.last_checkpoint:
             self._save(step)
             self.last_checkpoint = step
@@ -267,9 +271,38 @@ def train_one(config_path: Path, condition_id: str, seed: int) -> None:
     print(json.dumps({"condition_id": condition_id, "seed": seed, "timesteps": target, "seconds": elapsed, "resumed": resumed}))
 
 
+def supervise(config_path: Path) -> None:
+    config, _ = load_config(config_path)
+    out = output_root(config)
+    jobs = [(condition["condition_id"], int(seed)) for condition in config["conditions"] for seed in config["seeds"]]
+    retry_limit = int(config["retry_limit"])
+    attempts: dict[str, int] = {}
+    queue_path = out / "queue_state.json"
+    for index, (condition, seed) in enumerate(jobs, start=1):
+        key = f"{condition}/seed_{seed}"
+        completion = out / "jobs" / condition / f"seed_{seed}" / "OUTPUT_COMPLETE.json"
+        if completion.is_file():
+            continue
+        while attempts.get(key, 0) <= retry_limit:
+            attempts[key] = attempts.get(key, 0) + 1
+            atomic_json(queue_path, {"active": key, "attempt": attempts[key], "completed_jobs": index - 1, "total_jobs": len(jobs), "updated_utc": utc_now()})
+            command = [sys.executable, str(Path(__file__).resolve()), "train-one", "--config", str(config_path.resolve()), "--condition", condition, "--seed", str(seed)]
+            log_path = out / "jobs" / condition / f"seed_{seed}" / "worker.log"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as log:
+                result = subprocess.run(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
+            if result.returncode == 0 and completion.is_file():
+                break
+            if attempts[key] > retry_limit:
+                atomic_json(queue_path, {"failed": key, "attempts": attempts[key], "updated_utc": utc_now()})
+                raise RuntimeError(f"job failed after retry: {key}")
+    atomic_json(queue_path, {"completed": True, "completed_jobs": len(jobs), "total_jobs": len(jobs), "updated_utc": utc_now()})
+    print(json.dumps(json.loads(queue_path.read_text(encoding="utf-8")), indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("prepare", "benchmark", "train-one"))
+    parser.add_argument("command", choices=("prepare", "benchmark", "train-one", "supervise"))
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--source-root")
     parser.add_argument("--steps", type=int, default=4096)
@@ -278,10 +311,12 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "prepare": prepare(args.config, args.source_root)
     elif args.command == "benchmark": benchmark(args.config, args.steps)
-    else:
+    elif args.command == "train-one":
         if args.condition is None or args.seed is None:
             parser.error("train-one requires --condition and --seed")
         train_one(args.config, args.condition, args.seed)
+    else:
+        supervise(args.config)
 
 
 if __name__ == "__main__":
