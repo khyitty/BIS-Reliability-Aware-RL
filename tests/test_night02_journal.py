@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "journal"))
 
 from night02_common import RunningStatistic, schedule_integral, stable_order
 from run_night02_cpu import verify_checkpoint
+from evaluate_night02_cpu import Controller
 
 
 def test_stable_order_is_deterministic_and_label_separated() -> None:
@@ -45,3 +46,15 @@ def test_checkpoint_validation_rejects_identity_substitution(tmp_path: Path) -> 
     assert verify_checkpoint(directory, metadata) == metadata
     with pytest.raises(RuntimeError, match="seed"):
         verify_checkpoint(directory, {"seed": 46})
+
+
+def test_pi_controller_resets_and_does_not_integrate_missing_feedback() -> None:
+    controller = Controller("PI", 1.0, 0.1, 0.001)
+    missing = {"visible_current_bis_mask": 0.0, "visible_current_bis_value": 0.0}
+    assert controller.predict_once(missing) == 1.0
+    assert controller.integral == 0.0
+    visible = {"visible_current_bis_mask": 1.0, "visible_current_bis_value": 55.0}
+    assert controller.predict_once(visible) > 1.0
+    assert controller.integral == 50.0
+    controller.reset()
+    assert controller.integral == 0.0 and controller.calls == 0
