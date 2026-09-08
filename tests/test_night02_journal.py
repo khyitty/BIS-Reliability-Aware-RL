@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "journal"))
 from night02_common import RunningStatistic, schedule_integral, stable_order
 from run_night02_cpu import verify_checkpoint
 from evaluate_night02_cpu import Controller
+from summarize_night02 import mean_sd
 
 
 def test_stable_order_is_deterministic_and_label_separated() -> None:
@@ -58,3 +59,9 @@ def test_pi_controller_resets_and_does_not_integrate_missing_feedback() -> None:
     assert controller.integral == 50.0
     controller.reset()
     assert controller.integral == 0.0 and controller.calls == 0
+
+
+def test_public_summary_seed_dispersion_uses_sample_sd() -> None:
+    mean, spread = mean_sd([1.0, 2.0, 3.0])
+    assert mean == pytest.approx(2.0)
+    assert spread == pytest.approx(1.0)
