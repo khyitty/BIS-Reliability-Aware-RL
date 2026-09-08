@@ -11,7 +11,7 @@ from vitaldb_state_selection.pkpd import DualDrugSimulator, PatientProfile, dete
 
 from .action import ActionApplication, apply_propofol_action
 from .config import EnvironmentConfig
-from .observation import BISObservationProcessor, SyntheticObservationTemplate
+from .observation import BISObservationProcessor, ObservationRule, SyntheticObservationTemplate
 from .schedule import ConstantRemifentanilSchedule, PiecewiseConstantRemifentanilSchedule
 from .state import BuiltState, CompletedDrugInterval, build_state
 
@@ -36,6 +36,7 @@ class AnesthesiaEnvironmentCore:
         config: EnvironmentConfig,
         observation_template: SyntheticObservationTemplate,
         remifentanil_schedule: RemifentanilSchedule | None = None,
+        observation_rule: ObservationRule | None = None,
     ) -> None:
         if observation_template.episode_horizon_seconds < config.episode_horizon_seconds:
             raise ValueError("template horizon cannot be shorter than environment horizon")
@@ -43,6 +44,7 @@ class AnesthesiaEnvironmentCore:
         self.config = config
         self.template = observation_template
         self.schedule = remifentanil_schedule or ConstantRemifentanilSchedule(0.0)
+        self.observation_rule = observation_rule
         self._simulator: DualDrugSimulator
         self._processor: BISObservationProcessor
         self._intervals: list[CompletedDrugInterval]
@@ -60,7 +62,9 @@ class AnesthesiaEnvironmentCore:
         if options not in (None, {}):
             raise ValueError("Stage II reset options are not implemented")
         self._simulator = DualDrugSimulator.from_profile(self.profile)
-        self._processor = BISObservationProcessor(self.config.preprocessing_id, self.template)
+        self._processor = BISObservationProcessor(
+            self.config.preprocessing_id, self.template, self.observation_rule
+        )
         self._intervals = []
         self._last_transition = None
         self._elapsed = 0.0
@@ -185,6 +189,9 @@ class AnesthesiaEnvironmentCore:
             "propofol_rate_mg_per_min": 0.0 if application is None else application.propofol_rate_mg_per_min,
             "remifentanil_rate_microgram_per_min": remi_rate,
             "preprocessing_id": self.config.preprocessing_id.value,
+            "observation_rule_id": (
+                None if self.observation_rule is None else self.observation_rule.rule_id
+            ),
             "state_id": self.config.state_id.value,
             "template_id": self.template.template_id,
             "action_saturation_count": self._saturation_count,

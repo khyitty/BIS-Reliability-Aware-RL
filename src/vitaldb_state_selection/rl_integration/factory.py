@@ -7,6 +7,7 @@ from vitaldb_state_selection.anesthesia import (
     ConditionID,
     EnvironmentConfig,
     FOUR_CONDITION_CONFIGS,
+    ObservationRule,
     SyntheticObservationTemplate,
 )
 from vitaldb_state_selection.anesthesia.schedule import ConstantRemifentanilSchedule, PiecewiseConstantRemifentanilSchedule
@@ -26,6 +27,7 @@ def make_gymnasium_environment(
     remifentanil_schedule: Schedule,
     seed: int,
     episode_horizon_seconds: float | None = None,
+    observation_rule: ObservationRule | None = None,
 ) -> GymnasiumAnesthesiaEnv:
     condition = condition_id if isinstance(condition_id, ConditionID) else ConditionID(condition_id)
     base = FOUR_CONDITION_CONFIGS[condition.value]
@@ -36,5 +38,6 @@ def make_gymnasium_environment(
         config=config,
         observation_template=observation_template,
         remifentanil_schedule=remifentanil_schedule,
+        observation_rule=observation_rule,
     )
     return GymnasiumAnesthesiaEnv(core, default_seed=seed)

@@ -1,0 +1,30 @@
+{
+  "protocol_id": "journal_day01_synthetic_factorial_v1",
+  "source_commit": "20582de4bcae12a7cb4c3e60d9a83222cfe87158",
+  "evidence_scope": "synthetic_engineering_only_not_vitaldb_or_clinical_evidence",
+  "training_seed": 45,
+  "development_split_seed": 20260908,
+  "synthetic_subject_count": 12,
+  "cases_per_subject": 2,
+  "validation_subject_fraction": 0.15,
+  "episode_horizon_seconds": 600,
+  "benchmark_timesteps": 4096,
+  "pilot_timesteps": 32768,
+  "evaluation_policy": "deterministic_final_policy_on_fixed_validation_subjects",
+  "device": "cpu",
+  "torch_threads": 1,
+  "concurrent_training_jobs": 1,
+  "ppo_source": "data/manifests/phase8d_final_ppo_config.json",
+  "scaler_source": "data/manifests/phase8c_scaler_registry.json",
+  "output_root": "outputs/journal/day01/synthetic_seed45",
+  "conditions": [
+    {"condition_id": "Goff_A30_S0", "sqi_threshold": null, "age_seconds": 30, "state_id": "S0"},
+    {"condition_id": "Goff_A20_S0", "sqi_threshold": null, "age_seconds": 20, "state_id": "S0"},
+    {"condition_id": "G50_A30_S0", "sqi_threshold": 50, "age_seconds": 30, "state_id": "S0"},
+    {"condition_id": "G50_A20_S0", "sqi_threshold": 50, "age_seconds": 20, "state_id": "S0"},
+    {"condition_id": "Goff_A30_S1", "sqi_threshold": null, "age_seconds": 30, "state_id": "S1"},
+    {"condition_id": "Goff_A20_S1", "sqi_threshold": null, "age_seconds": 20, "state_id": "S1"},
+    {"condition_id": "G50_A30_S1", "sqi_threshold": 50, "age_seconds": 30, "state_id": "S1"},
+    {"condition_id": "G50_A20_S1", "sqi_threshold": 50, "age_seconds": 20, "state_id": "S1"}
+  ]
+}

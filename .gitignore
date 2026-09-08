@@ -1,5 +1,6 @@
 .venv/
 .venv-phase7h/
+.venv-journal/
 venv/
 __pycache__/
 *.py[cod]

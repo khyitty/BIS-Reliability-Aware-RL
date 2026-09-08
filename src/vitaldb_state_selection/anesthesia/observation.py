@@ -87,10 +87,33 @@ class BISAuditEvent:
     reason: BISReason
 
 
+@dataclass(frozen=True, slots=True)
+class ObservationRule:
+    """Journal-only factorization of SQI gating and accepted-event age."""
+
+    rule_id: str
+    sqi_threshold: float | None
+    staleness_seconds: float
+
+    def __post_init__(self) -> None:
+        if not self.rule_id:
+            raise ValueError("observation rule ID is required")
+        if self.sqi_threshold is not None and (not math.isfinite(self.sqi_threshold) or self.sqi_threshold < 0.0):
+            raise ValueError("SQI threshold must be finite and nonnegative")
+        if self.staleness_seconds not in (20.0, 30.0):
+            raise ValueError("journal observation age must be 20 or 30 seconds")
+
+
 class BISObservationProcessor:
-    def __init__(self, preprocessing_id: PreprocessingID, template: SyntheticObservationTemplate):
+    def __init__(
+        self,
+        preprocessing_id: PreprocessingID,
+        template: SyntheticObservationTemplate,
+        observation_rule: ObservationRule | None = None,
+    ):
         self.preprocessing_id = preprocessing_id
         self.template = template
+        self.observation_rule = observation_rule
         self._events: list[BISAuditEvent] = []
 
     @property
@@ -101,6 +124,8 @@ class BISObservationProcessor:
 
     @property
     def staleness_cap(self) -> float:
+        if self.observation_rule is not None:
+            return self.observation_rule.staleness_seconds
         return 30.0 if self.preprocessing_id is PreprocessingID.P0 else 20.0
 
     def ingest(self, event: BISEvent, latent_bis: float) -> BISReason:
@@ -110,6 +135,14 @@ class BISObservationProcessor:
             reason, value = BISReason.NONFINITE, None
         elif not 0.0 <= latent_bis <= 100.0:
             reason, value = BISReason.OUT_OF_RANGE, None
+        elif self.observation_rule is not None and self.observation_rule.sqi_threshold is not None:
+            sqi = self.template.sqi_exact(event.timestamp_seconds)
+            if sqi is None:
+                reason, value = BISReason.SQI_MISSING, None
+            elif not math.isfinite(sqi) or sqi < self.observation_rule.sqi_threshold:
+                reason, value = BISReason.SQI_LOW, None
+            else:
+                reason, value = BISReason.AVAILABLE, float(latent_bis)
         elif self.preprocessing_id is PreprocessingID.P1:
             sqi = self.template.sqi_exact(event.timestamp_seconds)
             if sqi is None:
