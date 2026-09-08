@@ -1,0 +1,30 @@
+{
+  "protocol_id": "journal_night02_vitaldb_informed_v1",
+  "evidence_scope": "vitaldb_informed_reconstructed_simulation_not_clinical_intervention_evidence",
+  "source_root_env": "BIS_HISTORICAL_ROOT",
+  "source_runtime_relative": "data/processed/phase8c_train_runtime_inputs_v1",
+  "output_root": "outputs/journal/night02/real_v1",
+  "split_seed": 20260908,
+  "train_subject_fraction": 0.85,
+  "development_train_subject_limit": 96,
+  "validation_subject_limit": 24,
+  "tuning_subject_limit": 12,
+  "common_horizon_seconds": 600,
+  "seeds": [45, 46, 47],
+  "training_target_timesteps": 262144,
+  "checkpoint_interval_timesteps": 65536,
+  "workers": 1,
+  "torch_threads_per_worker": 1,
+  "heartbeat_seconds": 30,
+  "retry_limit": 1,
+  "conditions": [
+    {"condition_id": "Goff_A30_S0", "sqi_threshold": null, "age_seconds": 30, "state_id": "S0"},
+    {"condition_id": "Goff_A20_S0", "sqi_threshold": null, "age_seconds": 20, "state_id": "S0"},
+    {"condition_id": "G50_A30_S0", "sqi_threshold": 50, "age_seconds": 30, "state_id": "S0"},
+    {"condition_id": "G50_A20_S0", "sqi_threshold": 50, "age_seconds": 20, "state_id": "S0"},
+    {"condition_id": "Goff_A30_S1", "sqi_threshold": null, "age_seconds": 30, "state_id": "S1"},
+    {"condition_id": "Goff_A20_S1", "sqi_threshold": null, "age_seconds": 20, "state_id": "S1"},
+    {"condition_id": "G50_A30_S1", "sqi_threshold": 50, "age_seconds": 30, "state_id": "S1"},
+    {"condition_id": "G50_A20_S1", "sqi_threshold": 50, "age_seconds": 20, "state_id": "S1"}
+  ]
+}
