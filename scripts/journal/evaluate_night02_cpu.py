@@ -211,17 +211,60 @@ def evaluate_learning_trajectory(config_path: Path) -> None:
     print(json.dumps({"trajectory_rows": len(rows), "checkpoints_per_job": target // interval}))
 
 
+def verify_all_outputs(config_path: Path) -> None:
+    config, config_hash = load_config(config_path)
+    out, membership, _, _ = load_private(config)
+    train_subjects = set(membership["full_train_subjects"])
+    validation_subjects = set(membership["full_validation_subjects"])
+    if train_subjects & validation_subjects:
+        raise RuntimeError("private development split overlap")
+    if not set(membership["tuning_subjects"]).issubset(set(membership["train_subjects"])):
+        raise RuntimeError("tuning subjects are outside bounded training")
+    target, interval = int(config["training_target_timesteps"]), int(config["checkpoint_interval_timesteps"])
+    jobs = checkpoints = resumed = 0
+    for condition in config["conditions"]:
+        for seed in config["seeds"]:
+            directory = out / "jobs" / condition["condition_id"] / f"seed_{seed}"
+            completion = json.loads((directory / "OUTPUT_COMPLETE.json").read_text(encoding="utf-8"))
+            expected = {"condition_id": condition["condition_id"], "seed": seed, "timestep": target, "target_timesteps": target, "config_sha256": config_hash}
+            for key, value in expected.items():
+                if completion.get(key) != value:
+                    raise RuntimeError(f"completion identity mismatch: {key}")
+            if completion.get("test_access_count") != 0:
+                raise RuntimeError("test access recorded in completion")
+            resumed += int(bool(completion.get("resumed")))
+            jobs += 1
+            for timestep in range(interval, target + 1, interval):
+                verify_checkpoint(directory / f"checkpoint_{timestep:010d}", expected | {"timestep": timestep})
+                checkpoints += 1
+    baseline = json.loads((out / "baseline_aggregate.json").read_text(encoding="utf-8"))
+    ppo = json.loads((out / "ppo_aggregate.json").read_text(encoding="utf-8"))
+    trajectory = json.loads((out / "learning_trajectory_aggregate.json").read_text(encoding="utf-8"))
+    if len(baseline["aggregates"]) != 24 or len(ppo["aggregates"]) != 24 or len(trajectory["rows"]) != checkpoints:
+        raise RuntimeError("aggregate accounting mismatch")
+    if any(payload.get("test_access_count") != 0 for payload in (baseline, ppo, trajectory)):
+        raise RuntimeError("test access recorded in aggregate")
+    partials = [path for path in out.rglob("*") if ".partial" in path.name]
+    if partials:
+        raise RuntimeError("partial output remains")
+    result = {"verified": True, "training_jobs": jobs, "checkpoints": checkpoints, "resumed_jobs": resumed, "full_train_subject_count": len(train_subjects), "full_validation_subject_count": len(validation_subjects), "split_overlap_count": 0, "baseline_aggregate_rows": len(baseline["aggregates"]), "ppo_aggregate_rows": len(ppo["aggregates"]), "trajectory_rows": len(trajectory["rows"]), "partial_path_count": 0, "test_access_count": 0}
+    atomic_json(out / "verification.json", result)
+    print(json.dumps(result, indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("baselines", "ppo", "trajectory"))
+    parser.add_argument("command", choices=("baselines", "ppo", "trajectory", "verify"))
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args()
     if args.command == "baselines":
         tune_baselines(args.config)
     elif args.command == "ppo":
         evaluate_ppo(args.config)
-    else:
+    elif args.command == "trajectory":
         evaluate_learning_trajectory(args.config)
+    else:
+        verify_all_outputs(args.config)
 
 
 if __name__ == "__main__":
