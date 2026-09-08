@@ -3,6 +3,7 @@
   "source_commit": "20582de4bcae12a7cb4c3e60d9a83222cfe87158",
   "evidence_scope": "synthetic_engineering_only_not_vitaldb_or_clinical_evidence",
   "training_seed": 45,
+  "additional_engineering_seeds": [46, 47],
   "development_split_seed": 20260908,
   "synthetic_subject_count": 12,
   "cases_per_subject": 2,

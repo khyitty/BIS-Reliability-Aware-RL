@@ -51,7 +51,7 @@ from vitaldb_state_selection.rl_integration.train_runtime import ScaledTrainRunt
 
 DEFAULT_CONFIG = ROOT / "configs/journal/day01_cpu.json"
 REPORT_CSV = ROOT / "reports/journal/day01_results.csv"
-REPORT_MD = ROOT / "reports/journal/DAY01_REPORT.md"
+REPORT_MD = ROOT / "reports/journal/DAY01_SEED45_PILOT.md"
 
 
 def utc_now() -> str:
@@ -321,7 +321,10 @@ def valid_result(path: Path, condition: dict[str, Any], timesteps: int) -> dict[
 
 
 def write_reports(config: dict[str, Any], results: list[dict[str, Any]], failures: list[dict[str, Any]]) -> None:
-    REPORT_CSV.parent.mkdir(parents=True, exist_ok=True)
+    primary = int(config["training_seed"]) == 45 and int(config["pilot_timesteps"]) == 32768
+    report_csv = REPORT_CSV if primary else ROOT / config["output_root"] / "aggregate.csv"
+    report_md = REPORT_MD if primary else ROOT / config["output_root"] / "REPORT.md"
+    report_csv.parent.mkdir(parents=True, exist_ok=True)
     fields = [
         "condition_id", "state_id", "sqi_threshold", "age_seconds", "seed", "actual_timesteps",
         "elapsed_seconds", "steps_per_second", "training_cases_seen", "mae", "return",
@@ -329,7 +332,7 @@ def write_reports(config: dict[str, Any], results: list[dict[str, Any]], failure
         "action_boundary_fraction", "core_clip_fraction", "bis_counterfactual_action_delta_mean",
         "evidence_scope",
     ]
-    with REPORT_CSV.open("w", encoding="utf-8-sig", newline="") as stream:
+    with report_csv.open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.DictWriter(stream, fields)
         writer.writeheader()
         for result in results:
@@ -412,7 +415,7 @@ def write_reports(config: dict[str, Any], results: list[dict[str, Any]], failure
     ])
     if failures:
         lines.extend(["", "## 실패", ""] + [f"- {item['condition_id']}: {item['error']}" for item in failures])
-    REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    report_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 class RunLock:
@@ -442,8 +445,17 @@ def main() -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--benchmark", action="store_true", help="run only the first cell at benchmark budget")
     parser.add_argument("--resume", action="store_true", help="verify completed manifests and run remaining cells")
+    parser.add_argument("--seed", type=int, choices=(45, 46, 47), help="override the prespecified engineering seed")
+    parser.add_argument("--timesteps", type=int, choices=(32768, 65536, 131072, 262144), help="override the common rollout-aligned pilot milestone")
     args = parser.parse_args()
     config = json.loads(args.config.read_text(encoding="utf-8"))
+    if args.seed is not None:
+        config["training_seed"] = args.seed
+        config["output_root"] = f"outputs/journal/day01/synthetic_seed{args.seed}"
+    if args.timesteps is not None:
+        config["pilot_timesteps"] = args.timesteps
+        if args.timesteps != 32768:
+            config["output_root"] = f"{config['output_root']}_t{args.timesteps}"
     output_root = ROOT / config["output_root"]
     timesteps = int(config["benchmark_timesteps"] if args.benchmark else config["pilot_timesteps"])
     conditions = config["conditions"][:1] if args.benchmark else config["conditions"]

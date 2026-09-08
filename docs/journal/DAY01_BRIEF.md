@@ -44,3 +44,10 @@
 1. 비공개 train stores가 읽기 전용으로 제공되면 원래 TRAIN subject만으로 새 15% validation split을 생성하고 같은 8셀을 scratch 재학습한다.
 2. 데이터가 계속 없고 추가 공학 안정성 증거가 필요하면 seed 46의 8셀 전체를 동일 예산으로 실행한다.
 3. 예산 심화는 결과가 좋은 셀만이 아니라 모든 셀의 다음 공통 rollout-aligned milestone으로 수행한다.
+
+## 종료 갱신
+
+- 종료: 2026-09-09 00:18 KST에 마지막 학습 셀 완료. 최종 검증/보고는 00:30 목표 안에서 수행했다.
+- 실제 완료: 4 milestone × 3 seed × 8 condition = 96셀, 11,796,480 timestep, 실패 0. 별도 4,096-step benchmark 포함.
+- 262,144에서도 gate×age interaction 부호가 seed/S0/S1에 따라 달라 추가 합성 반복의 가치가 낮다고 판단해 새 job admission을 중단했다.
+- 전체 재개/검증 명령은 `.\.venv-journal\Scripts\python.exe scripts\journal\resume_day01.py`이다.
