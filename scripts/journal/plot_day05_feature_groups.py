@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+from datetime import datetime, timezone
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -19,7 +20,8 @@ SEEDS = (48, 49, 50, 51, 52)
 def main() -> None:
     with SOURCE.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
-    fig, axes = plt.subplots(1, 2, figsize=(10.2, 4.4), sharey=True, constrained_layout=True)
+    fig, axes = plt.subplots(1, 2, figsize=(10.2, 4.8), sharey=True)
+    fig.subplots_adjust(left=0.08, right=0.985, bottom=0.2, top=0.76, wspace=0.03)
     x = np.arange(len(STATES))
     colors = {seed: ("#c23b22" if seed == 50 else "#7393b3") for seed in SEEDS}
     for axis, profile in zip(axes, ("P0", "P1")):
@@ -34,9 +36,15 @@ def main() -> None:
         axis.set_title(profile); axis.set_xticks(x, STATES, rotation=25, ha="right")
         axis.set_xlabel("State representation"); axis.grid(axis="y", alpha=0.25)
     axes[0].set_ylabel("Latent-BIS MAE, 0–1,800 s")
-    handles, labels = axes[0].get_legend_handles_labels(); fig.legend(handles, labels, loc="outside upper center", ncol=6, frameon=False)
-    fig.suptitle("Day 05 exploratory development screening (reconstructed simulation)", y=1.08)
-    for path in (PNG, PDF): fig.savefig(path, dpi=300, bbox_inches="tight", metadata={"Creator": "deterministic Day05 plotting script"})
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.88),
+               ncol=6, frameon=False, fontsize=9)
+    fig.suptitle("Day 05 exploratory development screening (reconstructed simulation)", y=0.97)
+    creator = "deterministic Day05 plotting script"
+    fig.savefig(PNG, dpi=300, bbox_inches="tight", metadata={"Creator": creator})
+    fixed_time = datetime(2026, 9, 9, tzinfo=timezone.utc)
+    fig.savefig(PDF, dpi=300, bbox_inches="tight",
+                metadata={"Creator": creator, "CreationDate": fixed_time, "ModDate": fixed_time})
     plt.close(fig)
 
 
