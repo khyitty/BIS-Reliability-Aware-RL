@@ -43,7 +43,7 @@ Nclip은 모든 좌표를 ±10으로 잘라 현재 scaler에서 BIS 40/50/60을 
 
 ## 실행 시간
 
-전체 sprint wall time은 74.1분이다.
+전체 sprint wall time은 82.0분이다.
 
 ## 프로젝트 진행
 
