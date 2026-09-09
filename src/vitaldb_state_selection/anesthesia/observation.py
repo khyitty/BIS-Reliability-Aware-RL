@@ -100,8 +100,8 @@ class ObservationRule:
             raise ValueError("observation rule ID is required")
         if self.sqi_threshold is not None and (not math.isfinite(self.sqi_threshold) or self.sqi_threshold < 0.0):
             raise ValueError("SQI threshold must be finite and nonnegative")
-        if self.staleness_seconds not in (20.0, 30.0):
-            raise ValueError("journal observation age must be 20 or 30 seconds")
+        if self.staleness_seconds not in (10.0, 20.0, 30.0, 60.0):
+            raise ValueError("journal observation age must be 10, 20, 30, or 60 seconds")
 
 
 class BISObservationProcessor:
