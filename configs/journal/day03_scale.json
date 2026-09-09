@@ -1,0 +1,52 @@
+{
+  "protocol_id": "journal_day03_scale_v1",
+  "evidence_scope": "exploratory_vitaldb_informed_reconstructed_simulation_not_clinical_intervention_evidence",
+  "night02_config": "configs/journal/night02_cpu.json",
+  "night02_output_root": "outputs/journal/night02/real_v1",
+  "output_root": "outputs/journal/day03/scale_v1",
+  "condition_profile": "Goff_A30",
+  "states": ["S0", "S1"],
+  "transforms": {
+    "N0": {"kind": "identity", "source": "night02_scaler"},
+    "Nclip": {"kind": "clip", "absolute_limit": 10.0, "source": "night02_scaler"},
+    "Nscale": {"kind": "fixed_coordinate_rescale", "formula": "z_j / max(1, q95(abs(z_j)))", "source": "training_calibration_only"}
+  },
+  "seeds": [45, 46, 47],
+  "training_target_timesteps": 260096,
+  "expected_completed_rollouts": 127,
+  "expected_training_epochs": 1270,
+  "checkpoint_interval_timesteps": 65536,
+  "common_horizon_seconds": 600,
+  "calibration": {
+    "state": "S1",
+    "case_scope": "all_fixed_96_training_cases",
+    "controllers": ["constant_1.5_mg_per_10s", "frozen_selected_Goff_A30_PI"],
+    "quantile": 0.95,
+    "binary_factor": 1.0
+  },
+  "new_training_blocks": [
+    {"priority": 1, "transform": "Nclip", "state": "S0"},
+    {"priority": 2, "transform": "Nscale", "state": "S1"},
+    {"priority": 3, "transform": "Nscale", "state": "S0"}
+  ],
+  "reused_cells": [
+    {"transform": "N0", "state": "S0", "source": "night02_primary"},
+    {"transform": "N0", "state": "S1", "source": "night02_primary"},
+    {"transform": "Nclip", "state": "S1", "source": "night02_clip_probe"}
+  ],
+  "torch_threads_per_worker": 1,
+  "maximum_workers": 2,
+  "queue_choice": {
+    "workers": 1,
+    "single_worker_steps_per_second": 607.7848,
+    "two_worker_aggregate_steps_per_second": 596.9693,
+    "benchmark_steps_per_process": 8192,
+    "decision": "one_worker_higher_measured_aggregate_throughput"
+  },
+  "retry_limit": 1,
+  "heartbeat_seconds": 30,
+  "admission_stop_minutes": 110,
+  "training_stop_minutes": 125,
+  "hard_deadline_minutes": 145,
+  "test_access_count": 0
+}
