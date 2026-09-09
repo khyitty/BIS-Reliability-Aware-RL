@@ -7,7 +7,8 @@ import numpy as np
 from run_day03_scale import apply_transform
 from run_day04_confirmation import (
     CONTRAST_FORMULAS, Day04SequenceEnv, PRIMARY_METRICS, contrast_value,
-    metric_record, subject_rows, supervise, resume, verify_models,
+    evaluate, metric_record, prepare, subject_rows, supervise, resume,
+    verify, verify_models,
 )
 from vitaldb_state_selection.anesthesia import ObservationRule
 from vitaldb_state_selection.anesthesia.state import S0_FIELDS, S1_FIELDS
@@ -24,6 +25,7 @@ def test_exact_factorial_mapping_seed_order_and_budget():
     ]
     assert CONFIG["seeds"] == [48, 49, 50, 51, 52]
     assert CONFIG["training_target_timesteps"] == 524288 == 256 * 2048
+    assert CONFIG["expected_rollouts"] == 256
     assert CONFIG["expected_training_epochs"] == 2560
 
 
@@ -69,6 +71,7 @@ def test_preoutcome_freeze_resume_idempotence_and_no_partial_promotion_are_expli
     assert "if not" in runner and "supervise(config_path)" in runner
     assert "final_post_update" in verifier and "OUTPUT_COMPLETE.json" in verifier
     assert ".partial" in verifier and "partial artifact cannot be promoted" in verifier
+    assert supervisor.index("if all(") < supervisor.index("if not preoutcome_committed()")
 
 
 def test_paired_sampler_is_seeded_and_recovery_capable():
@@ -80,3 +83,17 @@ def test_test_access_is_frozen_zero_and_public_paths_are_generic():
     assert CONFIG["test_access_count"] == 0
     assert CONFIG["output_root"] == "outputs/journal/day04/confirmation_v1"
     assert "C:\\Users\\" not in json.dumps(CONFIG)
+
+
+def test_runtime_membership_evaluation_and_publication_contracts_are_explicit():
+    preparation = inspect.getsource(prepare)
+    evaluation = inspect.getsource(evaluate)
+    verification = inspect.getsource(verify)
+    model_verification = inspect.getsource(verify_models)
+    assert "membership overlap" in preparation
+    assert preparation.index('atomic_json(out/"private_membership.json"') < preparation.index("min_fresh=")
+    assert "verify_models(config_path)" in evaluation and "evaluation_lock.json" in evaluation
+    assert "expected=20*len" in verification and '"evaluation_calls":len(primary)' in verification
+    assert "subject_aggregation_before_group_metrics" in verification
+    assert "privacy token" in verification and '"test_access_count":0' in verification
+    assert "paired case order mismatch" in model_verification
