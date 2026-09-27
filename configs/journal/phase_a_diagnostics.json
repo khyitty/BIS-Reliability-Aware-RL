@@ -1,0 +1,40 @@
+{
+  "protocol_id": "journal_phase_a_diagnostics_v1",
+  "required_parent_sha": "1b772ccb947c973c5e86218fd23ff4a833c612ee",
+  "evidence_scope": "exploratory_development_diagnostics_not_clinical_causal_confirmatory_or_external_validation_evidence",
+  "historical_root_env": "BIS_HISTORICAL_ROOT",
+  "day04_output_root": "outputs/journal/day04/confirmation_v1",
+  "day05_output_root": "outputs/journal/day05/feature_groups_v1",
+  "day06_output_root": "outputs/journal/day06/concentration_anatomy_v1",
+  "output_root": "outputs/journal/phase_a/diagnostics_v1",
+  "horizon_seconds": 1800,
+  "early_end_seconds": 600,
+  "diagnostic_sample_rows_per_window": 4096,
+  "journal_s0_seeds": [48, 49, 50, 51, 52],
+  "journal_sconc_seeds": [48, 49, 50, 51, 52],
+  "profiles": ["P0", "P1"],
+  "fresh_initialization_seeds": [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012],
+  "baseline_tuning_case_limit": 12,
+  "tci_candidates": [
+    {"target_ce": 2.0, "maintenance_mg_per_10s": 0.75, "kp": 2.0},
+    {"target_ce": 2.0, "maintenance_mg_per_10s": 1.5, "kp": 3.0},
+    {"target_ce": 2.5, "maintenance_mg_per_10s": 0.75, "kp": 2.0},
+    {"target_ce": 2.5, "maintenance_mg_per_10s": 1.5, "kp": 3.0},
+    {"target_ce": 3.0, "maintenance_mg_per_10s": 0.75, "kp": 2.0},
+    {"target_ce": 3.0, "maintenance_mg_per_10s": 1.5, "kp": 3.0}
+  ],
+  "bis_trim_candidates": [
+    {"bis_kp": 0.0, "bis_ki": 0.0},
+    {"bis_kp": 0.02, "bis_ki": 0.0},
+    {"bis_kp": 0.05, "bis_ki": 0.0},
+    {"bis_kp": 0.02, "bis_ki": 0.001},
+    {"bis_kp": 0.05, "bis_ki": 0.001},
+    {"bis_kp": 0.05, "bis_ki": 0.002}
+  ],
+  "workers": 1,
+  "torch_threads_per_worker": 1,
+  "future_reserve_bundle_access_count": 0,
+  "future_reserve_outcome_access_count": 0,
+  "future_reserve_statistic_access_count": 0,
+  "test_access_count": 0
+}
